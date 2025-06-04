@@ -13,6 +13,7 @@ from signal import pause
 
 
 button = Button(5, pull_up=True)  # CHANGE THIS to actual GPIO used
+button_R = Button(6, pull_up=True)  # CHANGE THIS to actual GPIO used
 num_of_leds = 7
 
 
@@ -184,7 +185,7 @@ def run_measurement(sensor, iteration):
         mse = mean_squared_error(base_values, results)
         print(f"🔍 MSE: {mse:.2f}")
 
-        if mse > 300:
+        if mse > 1000:
             print("⚠️ Fault Detected (MSE > 300)")
             set_led('r')  # Red
         else:
@@ -212,7 +213,7 @@ if __name__ == '__main__':
 
     #input("Calibration done. Replace resistor with DUT and press Enter...")
     # Loop parameters
-    iterations = 5
+    iterations = 10
     
     current_iteration = 0
 
@@ -228,12 +229,46 @@ if __name__ == '__main__':
             print("🛑 All iterations done.")
             set_led('s')
             exit()
+    
+    def average_base_data():
+        # Load all 5 sweeps
+        dfs = [pd.read_csv(f"data/sweep_{i}.csv") for i in range(1, 6)]
 
+        # Concatenate into one DataFrame
+        combined = pd.concat(dfs, axis=1)
+
+        # Drop extra headers
+        combined.columns = [f"sweep_{i}" for i in range(1, 6)]
+
+        # Compute row-wise average
+        combined['average'] = combined.mean(axis=1)
+
+        # Save base
+        combined[['average']].to_csv("data/base.csv", index=False)
+        print("✅ Saved base.csv (averaged impedance)")
+            
+    def redo_baseline():
+        iterations = 3
+
+        for i in range(iterations):
+            set_led('s')
+            print(f"\n--- Measurement {i+1}/{iterations} ---")
+            sensor.start_sweep()
+            results = sensor.sweep_impedance()
+            df = pd.DataFrame(results, columns=["Impedance (Ohms)"])
+            filename = f"data/sweep_{i+1}.csv"
+            df.to_csv(filename, index=False)
+            print(f"✅ Sweep {i+1} saved to '{filename}'")
+            
+            set_led('g')
+            
+        average_base_data()
+
+            
     print("🔘 Press the button to start measurement and fault detection.")
+    set_led('s')
+    set_led('b')
     button.when_pressed = on_button_press
-
-    pause()
-#     
 #     for i in range(iterations):
 #         print(f"\n--- Measurement {i+1}/{iterations} ---")
 #         sensor.start_sweep()
