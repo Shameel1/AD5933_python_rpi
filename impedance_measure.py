@@ -170,9 +170,11 @@ if __name__ == '__main__':
         sensor.start_sweep()
         results = sensor.sweep_impedance()
 
+        
+        
         # Ask user what to do with this data
         choice = input("Save this sweep or run fault detection? (s = save, f = fault detection, q = quit): ").strip().lower()
-
+        
         if choice == 's':
             df = pd.DataFrame(results, columns=["Impedance (Ohms)"])
             filename = f"sweep_{i+1}.csv"
@@ -182,15 +184,15 @@ if __name__ == '__main__':
         elif choice == 'f':
             # Fault detection against base.csv
             try:
-                base = pd.read_csv("base.csv")
+                base = pd.read_csv("data/base.csv")
                 base_values = base['average'].values
                 if len(base_values) != len(results):
                     print("❌ Length mismatch with base.csv")
                     continue
                 mse = mean_squared_error(base_values, results)
                 print(f"🔍 MSE: {mse:.2f}")
-                if mse > 3000:
-                    print("⚠️ Fault Detected (MSE > 3000)")
+                if mse > 300:
+                    print("⚠️ Fault Detected (MSE > 300)")
                 else:
                     print("✅ No Fault Detected")
             except FileNotFoundError:

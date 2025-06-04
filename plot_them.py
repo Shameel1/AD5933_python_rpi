@@ -10,7 +10,7 @@ dfs = []
 
 # Load and plot each sweep
 for i in range(1, num_files + 1):
-    filepath = f'sweep_{i}.csv'
+    filepath = f'data/sweep_{i}.csv'
     df = pd.read_csv(filepath)
     dfs.append(df[column_name])
     plt.plot(df.index, df[column_name], color='gray', alpha=0.4)
@@ -29,4 +29,4 @@ plt.title('Sweep Data with Average')
 plt.legend()
 plt.grid(True)
 plt.tight_layout()
-plt.show()
+plt.savefig('baseline.png')
