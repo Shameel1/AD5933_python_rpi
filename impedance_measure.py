@@ -157,8 +157,8 @@ if __name__ == '__main__':
     sensor.set_range_and_gain(out_range=V_OUT_2000mVpp, gain=GAIN_1X)
     sensor.set_freq_range(start_freq=30000, freq_inc=20, points=200)
 
-    print("Starting sweep and calibration...")
-    sensor.start_sweep()
+    #print("Starting sweep and calibration...")
+    #sensor.start_sweep()
     #sensor.calibrate(known_resistor_ohm=200000)
 
     #input("Calibration done. Replace resistor with DUT and press Enter...")
@@ -167,6 +167,7 @@ if __name__ == '__main__':
 
     for i in range(iterations):
         print(f"\n--- Measurement {i+1}/{iterations} ---")
+        sensor.start_sweep()
         results = sensor.sweep_impedance()
 
         # Ask user what to do with this data
