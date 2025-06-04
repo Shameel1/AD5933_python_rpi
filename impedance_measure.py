@@ -7,16 +7,13 @@ import csv
 from sklearn.metrics import mean_squared_error
 import pandas as pd
 
-import time
-from gpiozero import LED, Button
+import serial
+from gpiozero import Button
 from signal import pause
 
-# GPIO Setup
-led_red = LED(17)
-led_blue = LED(27)
-led_green = LED(22)
-button = Button(5, pull_up=True)  # CHANGE THIS to actual GPIO used
 
+button = Button(5, pull_up=True)  # CHANGE THIS to actual GPIO used
+num_of_leds = 7
 
 
 # I2C and Register Constants
@@ -159,23 +156,29 @@ class AD5933:
             zmod.append(imp)
             self.write_reg(0x80, self.control_byte(FUNC_INC_FREQ))
             time.sleep(0.05)
+            # Send 'b' at 7 equal intervals
+            if i % (self.points // num_of_leds) == 0:
+                ser.write(b'b')
         return zmod
 
+# Function to send LED command to Arduino
+def set_led(command_char):
+    ser.write(command_char.encode())
+    
 # Function to run fault detection and LED signaling
 def run_measurement(sensor, iteration):
     print(f"\n--- Measurement {iteration+1} ---")
-    
-    led_blue.on()
+
     sensor.start_sweep()
     results = sensor.sweep_impedance()
-    led_blue.off()
+    set_led('s')  # Turn off blue after sweep
 
     try:
         base = pd.read_csv("data/base.csv")
         base_values = base['average'].values
         if len(base_values) != len(results):
             print("❌ Length mismatch with base.csv")
-            led_red.on()
+            set_led('r')  # Red for error
             return
 
         mse = mean_squared_error(base_values, results)
@@ -183,14 +186,14 @@ def run_measurement(sensor, iteration):
 
         if mse > 300:
             print("⚠️ Fault Detected (MSE > 300)")
-            led_red.on()
+            set_led('r')  # Red
         else:
             print("✅ No Fault Detected")
-            led_green.on()
+            set_led('g')  # Green
 
     except FileNotFoundError:
         print("❌ base.csv not found.")
-        led_red.on()
+        set_led('r')  # Red for error
 
 # --- Execution Block ---
 if __name__ == '__main__':
@@ -201,6 +204,11 @@ if __name__ == '__main__':
     #print("Starting sweep and calibration...")
     #sensor.start_sweep()
     #sensor.calibrate(known_resistor_ohm=200000)
+    
+    # Initialize Arduino Serial
+    ser = serial.Serial('/dev/ttyACM0', 9600, timeout=1)
+    time.sleep(2)  # Wait for Arduino to reset
+
 
     #input("Calibration done. Replace resistor with DUT and press Enter...")
     # Loop parameters
@@ -208,24 +216,23 @@ if __name__ == '__main__':
     
     current_iteration = 0
 
+    # Button press handler
     def on_button_press():
         global current_iteration
-        # Turn all LEDs off
-        led_red.off()
-        led_green.off()
-        led_blue.off()
+        set_led('s')  # Turn all off first
 
         if current_iteration < iterations:
             run_measurement(sensor, current_iteration)
             current_iteration += 1
         else:
             print("🛑 All iterations done.")
+            set_led('s')
             exit()
 
     print("🔘 Press the button to start measurement and fault detection.")
     button.when_pressed = on_button_press
 
-    pause()  # Keeps the program running
+    pause()
 #     
 #     for i in range(iterations):
 #         print(f"\n--- Measurement {i+1}/{iterations} ---")

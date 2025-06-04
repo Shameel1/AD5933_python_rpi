@@ -7,6 +7,10 @@ import csv
 from sklearn.metrics import mean_squared_error
 import pandas as pd
 
+import serial
+
+num_of_leds = 7
+
 # I2C and Register Constants
 AD5933_ADDR = 0x0D
 INTERNAL_CLK_HZ = 16000000
@@ -147,8 +151,14 @@ class AD5933:
             zmod.append(imp)
             self.write_reg(0x80, self.control_byte(FUNC_INC_FREQ))
             time.sleep(0.05)
+            # Send 'b' at 7 equal intervals
+            if i % (self.points // num_of_leds) == 0:
+                ser.write(b'b')
         return zmod
 
+# Function to send LED command to Arduino
+def set_led(command_char):
+    ser.write(command_char.encode())
 
 # --- Execution Block ---
 if __name__ == '__main__':
@@ -156,6 +166,11 @@ if __name__ == '__main__':
     sensor.set_range_and_gain(out_range=V_OUT_2000mVpp, gain=GAIN_1X)
     sensor.set_freq_range(start_freq=30000, freq_inc=20, points=200)
 
+   # Initialize Arduino Serial
+    ser = serial.Serial('/dev/ttyACM0', 9600, timeout=1)
+    time.sleep(2)  # Wait for Arduino to reset
+    
+    
     #print("Starting sweep and calibration...")
     #sensor.start_sweep()
     #sensor.calibrate(known_resistor_ohm=200000)
@@ -165,6 +180,7 @@ if __name__ == '__main__':
     iterations = 5
 
     for i in range(iterations):
+        set_led('s')
         print(f"\n--- Measurement {i+1}/{iterations} ---")
         sensor.start_sweep()
         results = sensor.sweep_impedance()
@@ -172,7 +188,9 @@ if __name__ == '__main__':
         filename = f"sweep_{i+1}.csv"
         df.to_csv(filename, index=False)
         print(f"✅ Sweep {i+1} saved to '{filename}'")
-
+        
+        set_led('g')
+        
 
 #     print("Reading impedance sweep...")
 #     results = sensor.sweep_impedance()

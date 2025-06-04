@@ -1,3 +1,4 @@
+
 # AD5933 Raspberry Pi Impedance Measurement & Fault Detection
 
 This project provides a complete Python-based workflow for measuring and analyzing impedance using the **Analog Devices AD5933 Evaluation Board (EVAL-AD5933EBZ)** and a **Raspberry Pi** over I²C. The system is designed for applications such as **monitoring piezoelectric materials**, performing **fault detection**, and capturing sweep-based impedance data.
@@ -11,6 +12,7 @@ This project provides a complete Python-based workflow for measuring and analyzi
 - **Communication**: I²C (SDA/SCL)
 - **Calibration Resistor**: 200 kΩ standard resistor
 - **Target System**: Piezoelectric material or other impedance-based system (Device Under Test)
+- **Secondary MCU**: Arduino (connected via USB `/dev/ttyACM0` @ 9600 baud)
 - **Software**: Python 3 with `smbus`, `pandas`, `matplotlib`, and `scikit-learn`
 
 ---
@@ -26,38 +28,70 @@ This project provides a complete Python-based workflow for measuring and analyzi
 | **+5V**            | Pi 5V (Pin 2 or 4) |
 | **GND**            | Pi GND (Pin 6) |
 
+| Arduino Connection | Function |
+|--------------------|----------|
+| `/dev/ttyACM0`     | NeoPixel control (status indication) |
+
+| Raspberry Pi GPIO | Function       |
+|-------------------|----------------|
+| GPIO5             | Button Input (active low) |
+
 ---
 
 ## 🧪 Measurement Workflow
 
-### 🔧 1. **Calibration**
-- Connect a **200 kΩ resistor** across the T7 (VIN) and T8 (VOUT) terminals.
-- Run the script to **perform calibration** and compute the **gain factor**.
+### 🔹 1. Collect Baseline Data
+Start with collecting 5 clean, fault-free trials:
 
-### 🔄 2. **Measurement**
-- Replace the resistor with **the piezoelectric material** or DUT.
-- Configure:
-  - **Start Frequency**
-  - **Frequency Increment**
-  - **Number of Points**
-- Perform an impedance **sweep**.
-- Save data to CSV or proceed to fault detection.
+```bash
+python3 save_base_data.py
+````
 
-### ⚠️ 3. **Fault Detection**
-- Compare a new sweep against a previously computed **baseline average** (`base.csv`).
-- Compute **Mean Squared Error (MSE)**.
-- If MSE > 3000, the system flags a **fault**.
+### 🔹 2. Visualize and Verify
+
+Check for inconsistencies or noise:
+
+```bash
+python3 plot_them.py
+```
+
+If discrepancies exist, troubleshoot and repeat the data collection.
+
+### 🔹 3. Average Baseline
+
+Once verified, compute the average baseline for fault detection:
+
+```bash
+python3 average_base.py
+```
+
+This generates `base.csv`, which is used for MSE comparison in fault detection.
+
+### 🔹 4. Run Measurement and Detection
+
+Now run the main program:
+
+```bash
+python3 impedance_measure.py
+```
+
+* The system will initialize and wait.
+* Press the **button on GPIO5** to begin each measurement.
 
 ---
 
-## 🧠 Features
+## 🧠 LED Feedback (via Arduino)
 
-- 📈 Impedance measurement via frequency sweep
-- 🧪 Calibration using known resistor
-- 💾 CSV data export using `pandas`
-- 🧮 Fault detection using `scikit-learn` MSE
-- 🖥️ Terminal-based user interface
-- 🐍 Fully implemented in Python using `smbus` and standard packages
+The Arduino controls a 7-LED NeoPixel strip and indicates system status:
+
+| LED Color | Meaning                      |
+| --------- | ---------------------------- |
+| 🔵 Blue   | Measurement in progress      |
+| 🟢 Green  | No fault detected            |
+| 🔴 Red    | Fault detected or error      |
+| ⚫ Off     | Idle state / ready for input |
+
+The blue LEDs animate incrementally (1–7) during the sweep, giving a visual "loading" effect.
 
 ---
 
@@ -68,9 +102,9 @@ Install required Python libraries:
 ```bash
 sudo apt install python3-pip i2c-tools
 pip3 install pandas matplotlib scikit-learn
-````
+```
 
-Enable I2C on your Pi via `raspi-config` if not already:
+Enable I²C on your Pi via `raspi-config` if not already:
 
 ```bash
 sudo raspi-config
@@ -79,53 +113,28 @@ sudo raspi-config
 
 ---
 
-## 🚀 Running the Program
-
-Run the main Python script:
-
-```bash
-python3 impedance_measure.py
-```
-
-You will be prompted to:
-
-* Calibrate using the 200kΩ resistor
-* Replace with DUT and begin sweep
-* Save or analyze data for faults
-
----
-
-## 📊 Generating the Baseline
-
-After saving 5 good sweeps:
-
-```bash
-python3 average_base.py
-```
-
-This creates `base.csv` from `sweep_1.csv` to `sweep_5.csv`.
-
----
-
 ## ⚙️ Fault Detection Logic
 
-The system computes:
+The system compares the current impedance sweep with the averaged baseline using **Mean Squared Error (MSE)**:
 
 ```python
 from sklearn.metrics import mean_squared_error
 mse = mean_squared_error(base_values, new_sweep)
 ```
 
-* ✅ If MSE ≤ 3000 → system is healthy
-* ⚠️ If MSE > 3000 → **Fault detected**
+| MSE Value | Interpretation    |
+| --------- | ----------------- |
+| ≤ 300     | ✅ Healthy system  |
+| > 300     | ⚠️ Fault detected |
 
 ---
 
 ## 🛠 Troubleshooting
 
-* Use `i2cdetect -y 1` to check if AD5933 is detected (default I²C address: `0x0D`)
-* If `base.csv` not found, generate it using saved sweeps first
-* Ensure proper settling time and frequency configuration for accurate data
+* Run `i2cdetect -y 1` to check if AD5933 is visible (`0x0D`)
+* Make sure `base.csv` exists and matches the expected point count
+* Ensure the Arduino is on `/dev/ttyACM0` and the NeoPixel code is flashed
+* Button must be wired with pull-up (NO type); default state should be high
 
 ---
 
@@ -133,3 +142,6 @@ mse = mean_squared_error(base_values, new_sweep)
 
 Shameel Abdulla
 2025 – Qatar
+
+
+
