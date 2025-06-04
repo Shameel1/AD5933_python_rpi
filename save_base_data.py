@@ -7,18 +7,6 @@ import csv
 from sklearn.metrics import mean_squared_error
 import pandas as pd
 
-import time
-from gpiozero import LED, Button
-from signal import pause
-
-# GPIO Setup
-led_red = LED(17)
-led_blue = LED(27)
-led_green = LED(22)
-button = Button(5, pull_up=True)  # CHANGE THIS to actual GPIO used
-
-
-
 # I2C and Register Constants
 AD5933_ADDR = 0x0D
 INTERNAL_CLK_HZ = 16000000
@@ -161,36 +149,6 @@ class AD5933:
             time.sleep(0.05)
         return zmod
 
-# Function to run fault detection and LED signaling
-def run_measurement(sensor, iteration):
-    print(f"\n--- Measurement {iteration+1} ---")
-    
-    led_blue.on()
-    sensor.start_sweep()
-    results = sensor.sweep_impedance()
-    led_blue.off()
-
-    try:
-        base = pd.read_csv("data/base.csv")
-        base_values = base['average'].values
-        if len(base_values) != len(results):
-            print("❌ Length mismatch with base.csv")
-            led_red.on()
-            return
-
-        mse = mean_squared_error(base_values, results)
-        print(f"🔍 MSE: {mse:.2f}")
-
-        if mse > 300:
-            print("⚠️ Fault Detected (MSE > 300)")
-            led_red.on()
-        else:
-            print("✅ No Fault Detected")
-            led_green.on()
-
-    except FileNotFoundError:
-        print("❌ base.csv not found.")
-        led_red.on()
 
 # --- Execution Block ---
 if __name__ == '__main__':
@@ -205,73 +163,17 @@ if __name__ == '__main__':
     #input("Calibration done. Replace resistor with DUT and press Enter...")
     # Loop parameters
     iterations = 5
-    
-    current_iteration = 0
 
-    def on_button_press():
-        global current_iteration
-        # Turn all LEDs off
-        led_red.off()
-        led_green.off()
-        led_blue.off()
+    for i in range(iterations):
+        print(f"\n--- Measurement {i+1}/{iterations} ---")
+        sensor.start_sweep()
+        results = sensor.sweep_impedance()
+        df = pd.DataFrame(results, columns=["Impedance (Ohms)"])
+        filename = f"sweep_{i+1}.csv"
+        df.to_csv(filename, index=False)
+        print(f"✅ Sweep {i+1} saved to '{filename}'")
 
-        if current_iteration < iterations:
-            run_measurement(sensor, current_iteration)
-            current_iteration += 1
-        else:
-            print("🛑 All iterations done.")
-            exit()
 
-    print("🔘 Press the button to start measurement and fault detection.")
-    button.when_pressed = on_button_press
-
-    pause()  # Keeps the program running
-#     
-#     for i in range(iterations):
-#         print(f"\n--- Measurement {i+1}/{iterations} ---")
-#         sensor.start_sweep()
-#         results = sensor.sweep_impedance()
-# 
-#         
-#         
-#         # Ask user what to do with this data
-#         choice = input("Save this sweep or run fault detection? (s = save, f = fault detection, q = quit): ").strip().lower()
-#         
-#         if choice == 's':
-#             df = pd.DataFrame(results, columns=["Impedance (Ohms)"])
-#             filename = f"sweep_{i+1}.csv"
-#             df.to_csv(filename, index=False)
-#             print(f"✅ Sweep {i+1} saved to '{filename}'")
-# 
-#         elif choice == 'f':
-#             # Fault detection against base.csv
-#             try:
-#                 base = pd.read_csv("data/base.csv")
-#                 base_values = base['average'].values
-#                 if len(base_values) != len(results):
-#                     print("❌ Length mismatch with base.csv")
-#                     continue
-#                 mse = mean_squared_error(base_values, results)
-#                 print(f"🔍 MSE: {mse:.2f}")
-#                 if mse > 300:
-#                     print("⚠️ Fault Detected (MSE > 300)")
-#                 else:
-#                     print("✅ No Fault Detected")
-#             except FileNotFoundError:
-#                 print("❌ base.csv not found. Please generate it using your baseline data.")
-# 
-#         elif choice == 'q':
-#             print("🛑 Exiting sweep loop.")
-#             break
-# 
-#         else:
-#             print("⚠️ Invalid input. Skipping this sweep.")
-# 
-#         # Optional user confirmation to continue
-#         cont = input("Press Enter to continue, or type 'q' to stop: ").strip().lower()
-#         if cont == 'q':
-#             break
-    
 #     print("Reading impedance sweep...")
 #     results = sensor.sweep_impedance()
 # 
@@ -281,3 +183,4 @@ if __name__ == '__main__':
 #     plt.title("Impedance Sweep")
 #     plt.grid(True)
 #     plt.show()
+
