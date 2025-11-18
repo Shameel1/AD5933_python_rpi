@@ -2,10 +2,13 @@ import time
 import math
 import numpy as np
 import smbus
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import csv
 from sklearn.metrics import mean_squared_error
 import pandas as pd
+
+import board
+import neopixel
 
 import serial
 from gpiozero import Button
@@ -15,7 +18,10 @@ from signal import pause
 button = Button(5, pull_up=True)  # CHANGE THIS to actual GPIO used
 button_R = Button(6, pull_up=True)  # CHANGE THIS to actual GPIO used
 num_of_leds = 7
-
+pixels = neopixel.NeoPixel(board.D18, num_of_leds,brightness=0.2)
+k=0
+mse_threshold = 300
+gain_factor =1.308545e-08
 
 # I2C and Register Constants
 AD5933_ADDR = 0x0D
@@ -57,7 +63,7 @@ class AD5933:
         self.clk = clk
         self.ctrl_range = V_OUT_2000mVpp
         self.ctrl_gain = GAIN_1X
-        self.gain_factor = 1.089500e-08
+        self.gain_factor =gain_factor  #1.089500e-08
 
     def write_reg(self, reg, val):
         self.bus.write_byte_data(AD5933_ADDR, reg, val)
@@ -150,6 +156,7 @@ class AD5933:
 
     def sweep_impedance(self):
         zmod = []
+        k=0
         for i in range(self.points):
             imp, real, imag = self.measure_impedance()
             freq = self.start_freq + i * self.freq_inc
@@ -159,12 +166,25 @@ class AD5933:
             time.sleep(0.05)
             # Send 'b' at 7 equal intervals
             if i % (self.points // num_of_leds) == 0:
-                ser.write(b'b')
+                set_led('b')
         return zmod
 
 # Function to send LED command to Arduino
 def set_led(command_char):
-    ser.write(command_char.encode())
+    
+    global k
+    if command_char=='b':
+        if k%7==0:
+            pixels.fill((0,0,0))
+        pixels[k%7] = (0, 0, 255)
+        k+=1
+    elif command_char=='s':
+        k=0
+        pixels.fill((0,0,0))
+    elif command_char=='r':
+        pixels.fill((255,0,0))
+    elif command_char=='g':
+        pixels.fill((0,255,0))
     
 # Function to run fault detection and LED signaling
 def run_measurement(sensor, iteration):
@@ -185,7 +205,7 @@ def run_measurement(sensor, iteration):
         mse = mean_squared_error(base_values, results)
         print(f"🔍 MSE: {mse:.2f}")
 
-        if mse > 1000:
+        if mse > mse_threshold:
             print("⚠️ Fault Detected (MSE > 300)")
             set_led('r')  # Red
         else:
@@ -204,12 +224,9 @@ if __name__ == '__main__':
 
     #print("Starting sweep and calibration...")
     #sensor.start_sweep()
-    #sensor.calibrate(known_resistor_ohm=200000)
+    #sensor.calibrate(known_resistor_ohm=3865)
     
-    # Initialize Arduino Serial
-    ser = serial.Serial('/dev/ttyACM0', 9600, timeout=1)
-    time.sleep(2)  # Wait for Arduino to reset
-
+    
 
     #input("Calibration done. Replace resistor with DUT and press Enter...")
     # Loop parameters
@@ -221,7 +238,7 @@ if __name__ == '__main__':
     def on_button_press():
         global current_iteration
         set_led('s')  # Turn all off first
-
+        
         if current_iteration < iterations:
             run_measurement(sensor, current_iteration)
             current_iteration += 1
@@ -230,15 +247,15 @@ if __name__ == '__main__':
             set_led('s')
             exit()
     
-    def average_base_data():
+    def average_base_data(iterations):
         # Load all 5 sweeps
-        dfs = [pd.read_csv(f"data/sweep_{i}.csv") for i in range(1, 6)]
+        dfs = [pd.read_csv(f"data/sweep_{i}.csv") for i in range(1, iterations+1)]
 
         # Concatenate into one DataFrame
         combined = pd.concat(dfs, axis=1)
 
         # Drop extra headers
-        combined.columns = [f"sweep_{i}" for i in range(1, 6)]
+        combined.columns = [f"sweep_{i}" for i in range(1, iterations+1)]
 
         # Compute row-wise average
         combined['average'] = combined.mean(axis=1)
@@ -262,13 +279,15 @@ if __name__ == '__main__':
             
             set_led('g')
             
-        average_base_data()
+        average_base_data(iterations)
 
             
     print("🔘 Press the button to start measurement and fault detection.")
     set_led('s')
     set_led('b')
     button.when_pressed = on_button_press
+    button_R.when_pressed = redo_baseline
+    pause()
 #     for i in range(iterations):
 #         print(f"\n--- Measurement {i+1}/{iterations} ---")
 #         sensor.start_sweep()

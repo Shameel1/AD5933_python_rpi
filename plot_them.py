@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 # Folder and file info
 folder = 'data'
-num_files = 5
+num_files = 3
 column_name = 'Impedance (Ohms)'
 
 dfs = []
