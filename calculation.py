@@ -8,3 +8,4 @@ resistor = 3.865
 frequency = 1/(2*np.pi*resistor*capacitance)/1000
 print(f"Frequency should be {frequency:.2f}kHz")
 
+#GAIN used = 
